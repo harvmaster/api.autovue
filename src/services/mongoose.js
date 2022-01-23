@@ -1,6 +1,6 @@
 'use strict'
 
-const config = require('/config')
+const config = require('../../config')
 const mongoose = require('mongoose')
 
 mongoose.connection.on('connected', () => {
@@ -15,13 +15,14 @@ mongoose.connection.on('error', (err) => {
 mongoose.set('debug', false)
 
 exports.connect = async () => {
-  mongoose.connect(config.mongoDB, {
+  const mongodb = `mongodb://${config.mongo.username}:${config.mongo.password}@${config.mongo.uri}`
+  mongoose.connect(mongodb, {
     keepAlive: 1,
     useNewUrlParser: true,
     useUnifiedTopology: true
   })
 
-  mongoose.set('useCreateIndex', true)
+  // mongoose.set('useCreateIndex', true)
 
   return mongoose.connection
 }

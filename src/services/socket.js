@@ -1,0 +1,113 @@
+'use strict'
+
+const config = require('../../config')
+
+const SocketIO = require('socket.io')
+
+const Bluetooth = require('./bluetooth')
+
+/**
+ * WebSocket Library for Jeopardy
+ * @memberof Services
+ */
+class WebSocket {
+  constructor () {
+    this.socket
+    this.clients
+    this.subscriptions
+  }
+
+  /**
+   * Setup the Websocket server
+   */
+  async startServer (server) {
+    // Setup Websockets
+    this.socket = SocketIO(server, {
+      cors: {
+        origin: "*",
+        methods: ['GET', 'POST']
+      }
+    })
+    this.clients = []
+    this.subscriptions = {}
+
+    Bluetooth.on('deviceFound', device => {
+      this.socket.emit('deviceFound', { [device.properties.address]: device.properties })
+      device.removeAllListeners('propertyChanged')
+      device.on('propertyChanged', (properties) => this.notify(properties.address, 'deviceUpdate', { [properties.address]: properties} ))
+    })
+
+    Bluetooth.on('deviceLost', device => {
+      device.removeAllListeners()
+      this.socket.emit('deviceLost', device.properties.address )
+
+    })
+    
+    this.socket.on('connection', (client) => this._onConnection(client))
+  }
+
+  async notify (group, event, msg) {
+    if (!this.subscriptions[group]) return
+
+    const channel = this.subscriptions[group]
+    const subscribers = Object.keys(channel)
+
+    subscribers.forEach(client => {
+      channel[client].emit(event, msg)
+    })
+
+  }
+
+  async subscribe (client, group) {
+    group = group?.split(' ').join('-')
+    if (!this.subscriptions[group]) this.subscriptions[group] = {}
+    this.subscriptions[group][client.id] = client
+
+    client.emit('subscribed', `subscribed to ${group}`)
+  }
+
+  async unsubscribe (client, group) {
+    delete this.subscriptions[group][client.id]
+
+    client.emit('unsubscribed', `unsubscribed to ${group}`)
+  }
+
+  async subscribeToDevices (client) {
+    let devices = await Bluetooth.getDiscoveryBuffer()
+    devices.forEach(device => {
+      this.subscribe(client, device.address)
+    })
+  }
+
+  refreshDiscoveredDevices (client, msg) {
+    const devices = Bluetooth.getDevices()
+    try {
+      client.emit('devices', devices)
+    } catch (err) {
+      err.description = 'Could not call client.emit()'
+      console.log(err)
+    }
+  }
+
+  /**
+   * Triggered when a Websocket client connects
+   * @param ws The Websocket of the client
+   * @private
+   */
+  async _onConnection (client) {
+    console.log('client connected')
+    this.refreshDiscoveredDevices(client)
+
+    // Setup event listeners
+    // client.prependAny(console.log)
+    client.on('refresh', (msg) => this.refreshDiscoveredDevices(client, msg))
+    client.on('list', (msg) => this.onList(client, msg))
+    client.on('subscribe', (msg) => this.subscribe(client, msg))
+    // client.on('check-host', (msg) => this.onCheckHost(client, msg))
+  }
+
+}
+
+const webSocket = new WebSocket()
+
+module.exports = webSocket

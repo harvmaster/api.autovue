@@ -1,6 +1,6 @@
 'use strict'
 
-const config = require('./config')
+const config = require('../config')
 
 // Application Packages
 const express = require('express')
@@ -12,6 +12,7 @@ const routes = require('./routes')
 
 // Services
 const mongoose = require('./services/mongoose')
+const webSocket = require('./services/socket')
 
 class App {
   async start () {
@@ -43,6 +44,14 @@ class App {
       console.log('Starting ExpressJS server')
       console.log(`ExpressJS listening at http://${server.address().address}:${server.address().port}`)
     })
+
+    try {
+      console.log('Starting Websocket server')
+      webSocket.startServer(server)
+      console.log('Websocket Server started')
+    } catch (err) {
+      console.error(err)
+    }
   }
 }
 
