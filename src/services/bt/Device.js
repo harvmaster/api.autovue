@@ -7,6 +7,7 @@ class Device extends EventEmitter{
   #deviceInterface;
   #propertiesInterface;
   #properties;
+  #media;
 
   constructor (obj) {
     super()
@@ -59,6 +60,19 @@ class Device extends EventEmitter{
 
   get connected () {
     return this.#properties.Connected
+  }
+
+  get Media () {
+    return this.$media
+  }
+
+  async getMediaInterface () {
+    // Get nodes
+    // Find node that contains 'playerX'
+    // Get proxyObject for playerX
+    // Get Track Details somehow?
+    // ???
+    // Profit
   }
 
   async pair () {
