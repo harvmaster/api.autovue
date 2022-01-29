@@ -1,3 +1,4 @@
+const { debug } = require('console');
 const EventEmitter = require('events')
 const { promiseTimeout } = require('../../resources')
 
@@ -7,6 +8,7 @@ class Device extends EventEmitter{
   #deviceInterface;
   #propertiesInterface;
   #properties;
+  #mediaObj
   #media;
 
   constructor (obj) {
@@ -73,6 +75,49 @@ class Device extends EventEmitter{
     // Get Track Details somehow?
     // ???
     // Profit
+
+    // Get Nodes
+    const nodes = this.#obj.nodes
+    
+    // Find node that contains 'playerX'
+    const players = nodes.filter(node => ndoe.includes('player'))
+    if (!players) throw `No players found for device: ${this.properties.address}`
+
+    // Get the bluez Object
+    const PlayerObj = await bus.getProxyObject('org.bluez', players[0])
+    this.#mediaObj = PlayerOBj
+    console.debug(`Media Object set for ${this.properties.address}`)
+    
+    // Get the MediaControl Interface
+    const Player = PlayerObj.getInterface('org.bluez.MediaPlayer1')
+    this.#media = Player
+    console.debug(`Media Player set for ${this.properties.address}`)
+
+    // Get the Media Properties Interface
+    const Properties = PlayerObj.getInterface('org.freedesktop.DBus.Properties')
+    this.#mediaProperties = Properties
+    console.debug(`Media Properties set for ${this.properties.address}`)
+
+    // Create listener for Property Changes
+    this.#mediaProperties.on('PropertiesChanged', (itf, changed, invalidated) => {
+      // Custom event handler for each property change
+      // Setting the value for the property in here as 'track' is updated to 'null' 1s after track info is given
+      const events = {
+        'track': (value) => {
+          if (!value) return
+          this.#mediaProperties[key.toLowerCase()] = changed[key]
+          this.emit('media-track', value)
+        }
+      }
+
+      // Iterate through and call the corresponding event
+      Object.keys(changed).forEach(key => {
+          // this.#mediaProperties[key.toLowerCase()] = changed[key]
+
+          if (events[key]) events[key.toLowerCase()] (changed[key])
+      })
+    })
+
   }
 
   async pair () {
