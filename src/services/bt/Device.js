@@ -1,6 +1,8 @@
 const { debug } = require('console');
 const EventEmitter = require('events')
 const { promiseTimeout } = require('../../resources')
+const dbus = require('dbus-next')
+let bus = dbus.systemBus();
 
 class Device extends EventEmitter{
 
@@ -9,6 +11,7 @@ class Device extends EventEmitter{
   #propertiesInterface;
   #properties;
   #mediaObj
+  #mediaProperties;
   #media;
 
   constructor (obj) {
@@ -28,7 +31,7 @@ class Device extends EventEmitter{
       this.#properties[property.toLowerCase()] = properties[property].value
     })
 
-    console.log(this.#propertiesInterface.listenerCount('PropertiesChanged'))
+    // console.debug(this.#propertiesInterface.listenerCount('PropertiesChanged'))
     this.#propertiesInterface.removeAllListeners('PropertiesChanged')
 
     this.#propertiesInterface.on('PropertiesChanged', (itf, changed, invalidated) => {
@@ -68,7 +71,7 @@ class Device extends EventEmitter{
     return this.$media
   }
 
-  async getMediaInterface () {
+  async initMediaInterface () {
     // Get nodes
     // Find node that contains 'playerX'
     // Get proxyObject for playerX
@@ -80,13 +83,14 @@ class Device extends EventEmitter{
     const nodes = this.#obj.nodes
     
     // Find node that contains 'playerX'
-    const players = nodes.filter(node => ndoe.includes('player'))
+    const players = nodes.filter(node => node.includes('player'))
     if (!players) throw `No players found for device: ${this.properties.address}`
 
     // Get the bluez Object
     const PlayerObj = await bus.getProxyObject('org.bluez', players[0])
-    this.#mediaObj = PlayerOBj
+    this.#mediaObj = PlayerObj
     console.debug(`Media Object set for ${this.properties.address}`)
+    console.debug(this.#mediaObj)
     
     // Get the MediaControl Interface
     const Player = PlayerObj.getInterface('org.bluez.MediaPlayer1')
@@ -136,18 +140,50 @@ class Device extends EventEmitter{
   }
   
   async connect () {
+    if (this.properties.connected) throw 'Device already connected'
     const connectListener = new Promise ((resolve, reject) => {
       this.once('connected', (properties) => resolve(properties))
     })
     this.#deviceInterface.Connect()
   
-    const res = await promiseTimeout(
-        10000,
-        `Could not connect to device ${this.#properties.name ? `(${this.properties.name})` : this.properties.address}`,
-        connectListener       
-      )
+    let res
+    try {
+      res = await promiseTimeout(
+          10000,
+          `Could not connect to device ${this.#properties.name ? `(${this.properties.name})` : this.properties.address}`,
+          connectListener       
+        )
+    } catch (err) {
+      throw err
+    }
+
+    
+    try {
+      this.initMediaInterface().then(() => console.debug(`Initialised media player (${this.properties.address})`)).catch(console.debug)
+    } catch (err) {
+      console.err(err)
+    }
   
     return res
+  }
+
+  async disconnect () {
+    const disconnectListener = new Promise ((resolve, reject) => {
+      this.once('disconnected', (properties) => resolve(properties))
+    })
+    this.#deviceInterface.Disconnect()
+
+    return true;
+
+    try {
+      const res = await promiseTimeout(
+        1000,
+        `Could not disconnect from device ${this.#properties.name ? `(${this.properties.name})` : this.properties.address}`,
+        disconnectListener       
+      )
+    } catch (err) {
+      throw err
+    }
   }
 
 

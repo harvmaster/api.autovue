@@ -7,8 +7,6 @@ const Device = require('./bt/Device')
 
 let Connections = require('../models/connection')
 
-let { debug } = require('../resources')
-
 /*
   Properties
     this.adapter: { Interface, Properties }
@@ -47,10 +45,10 @@ class Bluetooth extends EventEmitter{
     console.log('Initialising Bluetooth Agent')
     try {
       const bluez = await bus.getProxyObject('org.bluez', '/org/bluez')
-      // debug(bluez)
 
       const agentManager = bluez.getInterface('org.bluez.AgentManager1')
       agentManager.RegisterAgent('/test/agent', 'NoInputNoOutput')
+      console.log('Initialised Bluetooth Agent')
     } catch (err) {
       err.description = 'Failed to initialise Bluetooth Agent'
       throw err
@@ -75,7 +73,7 @@ class Bluetooth extends EventEmitter{
 
     } catch (err) {
       err.description = 'Failed to initalise Adapter'
-      debug(err.description)
+      console.debug(err.description)
       throw err
     }
   }
@@ -90,7 +88,7 @@ class Bluetooth extends EventEmitter{
       console.log('Initialised Object Manager')
     } catch (err) {
       err.description = 'Failed to get Object Manager'
-      debug(err.description)
+      console.debug(err.description)
       throw err
     }
   }
@@ -101,7 +99,7 @@ class Bluetooth extends EventEmitter{
       await this.adapter.properties.Set('org.bluez.Adapter1', 'Discoverable', new Variant ('b', state ))
     } catch (err) {
       err.description = `Failed to set discoverable to ${state}`
-      debug(err.description)
+      console.debug(err.description)
       throw err
     }
     return this
@@ -113,7 +111,7 @@ class Bluetooth extends EventEmitter{
       return state
     } catch (err) {
       err.description = `Failed to get discoverable state`
-      debug(err.description)
+      console.debug(err.description)
       throw err
     }
   }
@@ -133,48 +131,80 @@ class Bluetooth extends EventEmitter{
       // Handle when a device is found
       this.objectManager.on('InterfacesAdded', async (itf, added) => {
         const address = itf.split('dev')[1].substring(1, 18).split('_').join(':')
-        const deviceProxy = await bus.getProxyObject('org.bluez', `/org/bluez/hci0/dev_${added['org.bluez.Device1'].Address.value.split(':').join('_')}`)
-        const device = new Device(deviceProxy)
+        // console.debug(added)
+        try {
+          if (!added['org.bluez.Device1']) return
+          const deviceProxy = await bus.getProxyObject('org.bluez', `/org/bluez/hci0/dev_${added['org.bluez.Device1'].Address.value.split(':').join('_')}`)
+          const device = new Device(deviceProxy)
         
-        await device.init()
-        this.devices[address] = device
-        this.emit('deviceFound', device)
+          await device.init()
+          this.devices[address] = device
+          this.emit('deviceFound', device)
+        } catch (err) {
+          err.description = 'error when adding interface'
+          console.log(err)
+        }
       })
 
       // Handle when a device disappears
       this.objectManager.on('InterfacesRemoved', (itf, removed) => {
+        // console.log(itf, removed)
         const address = itf.split('dev')[1].substring(1, 18).split('_').join(':')
         const device = this.devices[address]
+
+        if (device.properties.paired) {
+          this.emit('deviceDisconnected', device)
+          this.rediscoverDevice(address)
+          return
+        }
         
         this.emit('deviceLost', device)
-        this.device[address].destroy()
+        device.destroy()
         delete this.devices[address]
       })
     } catch (err) {
       err.description = 'Failed to add current devices to buffer or could not add/remove interface from buffer'
-      debug(err.description)
+      console.debug(err.description)
       throw err
     }
 
     try {
-      debug('Starting Device Discovery')
+      console.debug('Starting Device Discovery')
       this.adapter.interface.StartDiscovery()
     } catch (err) {
       err.description = 'Failed to start bluetooth discovery'
-      debug(err.description)
+      console.debug(err.description)
       throw err
     }
   }
 
   async stopDiscovery () {
     try {
-      debug('Stopping Device Discovery')
+      console.debug('Stopping Device Discovery')
       this.adapter.interface.StopDiscovery()
     } catch (err) {
       err.description = 'Failed to stop bluetooth discovery'
-      debug(err.description)
+      console.debug(err.description)
       throw err
     }
+  }
+
+  async rediscoverDevice (address) {
+    //Remove any old data
+    this.devices[address].destroy()
+    delete this.devices[address]
+
+    // create device
+    const deviceObj = await bus.getProxyObject('org.bluez', `/org/bluez/hci0/dev_${address.split(':').join('_')}`)
+    const device = new Device(deviceObj)
+    await device.init()
+
+    // Emit as deviceFound because it shouldnt break anything
+    this.emit('deviceFound', device)
+    console.log(device.properties)
+
+    // add to devices
+    this.devices[address] = device
   }
 
   // Returns the devices found in hci0 nodes -- eg. hci0/dev_xx_xx_xx_xx_xx
@@ -183,7 +213,7 @@ class Bluetooth extends EventEmitter{
   async hardReloadDevices () {
     // Cleanly remove old devices
     Object.keys(this.devices).forEach(address => {
-      this.deviecs[address].destroy
+      this.devices[address].destroy
     })
     this.devices = {}
 
@@ -196,18 +226,27 @@ class Bluetooth extends EventEmitter{
 
         this.emit('deviceFound', device)
         
-        return device.properties
+        return device
       } catch (err) {
-        debug(`Failed to get device: ${node}`)
-        debug(err) 
+        console.debug(`Failed to get device: ${node}`)
+        console.debug(err) 
       }
     })
     const result = await Promise.all(devices).then(resolved => {
       const res = {}
-      resolved.forEach(r => res[r.address] = r)
+      // resolved.forEach(device => console.log(device.properties.alias))
+      resolved.forEach(r => res[r.properties.address] = r)
+      // console.log(res)
       return res
     })
     this.devices = result
+  }
+
+  getFormattedDevices () {
+    const devices = this.devices
+    const res = {}
+    Object.keys(devices).forEach(address => res[address] = devices[address].properties)
+    return res
   }
 
   getDevices () {
