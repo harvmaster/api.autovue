@@ -19,12 +19,8 @@ class App {
     //
     // Setup MongoDB
     //
-    try {
-      console.log('Connecting to MongoDB')
-      await mongoose.connect()
-    } catch (err) {
-      console.error(err.message)
-    }
+    console.log('Connecting to MongoDB')
+    mongoose.connect().catch(err => console.error(err.message))
     
     //
     // Setup ExpressJS middleware, routes, etc

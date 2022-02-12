@@ -1,8 +1,9 @@
 const EventEmitter = require('events')
-const { promiseTimeout } = require('../../resources')
 const dbus = require('dbus-next')
 let bus = dbus.systemBus();
-const { cleanDBusProperties, cleanDBusPrint } = require('../../resources')
+
+const { promiseTimeout, cleanDBusProperties, cleanDBusPrint } = require('../../resources')
+const { getAlbumCover } = require('../../resources/player')
 
 const { getInterface } = require('./DeviceInterface');
 
