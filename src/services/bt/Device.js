@@ -4,7 +4,7 @@ const dbus = require('dbus-next')
 let bus = dbus.systemBus();
 const { cleanDBusProperties, cleanDBusPrint } = require('../../resources')
 
-const { getInterface } = require('./DeviceInterface')
+const { getInterface } = require('./DeviceInterface');
 
 class Device extends EventEmitter{
 
@@ -12,18 +12,13 @@ class Device extends EventEmitter{
   #deviceInterface;
   #propertiesInterface;
   #properties;
-  #mediaObj;
-  #mediaPropertiesItf;
-  #mediaProperties;
-  #mediaControl;
   #media;
-  #mediaTransportProperties;
+
 
   constructor (obj) {
     super()
     this.#obj = obj
     this.#properties = {}
-    this.#mediaProperties = {}
     this.#media = {}
   }
   
@@ -46,8 +41,14 @@ class Device extends EventEmitter{
     this.#propertiesInterface.on('PropertiesChanged', (itf, changed, invalidated) => {
       // emit custom events if certain property was changed
       const customEvents = {
-        'Connected': (value) => this.emit(value ? 'connected' : 'disconnected', this.properties),
-        'Paired': (value) => this.emit(value ? 'paired' : 'unpaired', this.properties),
+        'Connected': (value) => {
+          customEvents.default(value, 'connected')
+          this.emit(value ? 'connected' : 'disconnected', this.properties)
+        },
+        'Paired': (value) => {
+          customEvents.default(value, 'paired')
+          this.emit(value ? 'paired' : 'unpaired', this.properties)
+        },
         'default': (value, key) => this.#properties[key] = value
       }
 
@@ -77,18 +78,13 @@ class Device extends EventEmitter{
   }
 
   get Media () {
-    return this.$media
+    return this.#media
   }
-
-  get mediaProperties () {
-    return this.#mediaProperties
-  }
-
-  // Volume is inside transport1
 
   async initMedia () {
-    // Contains the node for the player route
+    // Contains the node for the player route. if no node, probably a diconnect event or no player is present on the device
     const mediaControl = await getInterface(this.#obj, 'org.bluez.MediaControl1')
+    if (!mediaControl.properties.player) return
     
     // Get the bluez player Object
     const PlayerObj = await bus.getProxyObject('org.bluez', mediaControl.properties.player)
@@ -103,86 +99,26 @@ class Device extends EventEmitter{
           if (!value.Title) return true
           const reformatted = cleanDBusProperties(value)
           next(reformatted, key)
+          // just re-call next() and emit the changes again
+          getAlbumCover(reformatted).then(image => {
+            reformatted.image = image
+            next(reformatted, key, true)
+          })
         }
       }
     })
     this.#media.player = Player
     console.debug(`Media Player set for ${this.properties.address}`)
 
-    // setup event handler
+    // setup player event handler
     this.#media.player.on('propertyChanged', properties => this.emit('player-update', properties))
 
-    this.initMediaTransport()
+    // Initialise org.bluez.MediaTransport1
+    await this.initMediaTransport()
     console.debug(`Media Transporter set for ${this.properties.address}`)
 
-  }
-
-  async initMediaInterface () {
-    // Get nodes
-    // Get proxyObject for playerX
-    // Get Track Details somehow?
-    // ???
-    // Profit
-
-    // Get the player node
-    // const mediaControl = this.#obj.getInterface('org.bluez.MediaControl1')
-
-    const mediaControl = await getInterface(this.#obj, 'org.bluez.MediaControl1')
-    console.log(mediaControl.properties)
-
-    const props = this.#obj.getInterface('org.freedesktop.DBus.Properties')
-    const aProps = await props.GetAll('org.bluez.MediaControl1')
-
-    // console.log(mediaControl)
-
-    // Get the bluez Object
-    const PlayerObj = await bus.getProxyObject('org.bluez', aProps.Player.value)
-
-    // const PlayerObj = itf
-    this.#mediaObj = PlayerObj
-    console.debug(`Media Object set for ${this.properties.address}`)
-    
-    // Get the MediaControl Interface
-    const Player = PlayerObj.getInterface('org.bluez.MediaPlayer1')
-    this.#media = Player
-    console.debug(`Media Player set for ${this.properties.address}`)
-
-    // Get the Media Transport Interface
-    // console.log(this.#media)
-
-    // Get the Media Properties Interface
-    const Properties = PlayerObj.getInterface('org.freedesktop.DBus.Properties')
-    this.#mediaPropertiesItf = Properties
-    Properties.GetAll('org.bluez.MediaPlayer1').then(properties => {
-      Object.keys(properties).forEach(property => this.#mediaProperties[property.toLowerCase()] = properties[property].value)
-    })
-    console.debug(`Media Properties set for ${this.properties.address}`)
-
-
-    // Create listener for Property Changes
-    this.#mediaPropertiesItf.on('PropertiesChanged', (itf, changed, invalidated) => {
-      // Custom event handler for each property change
-      // Setting the value for the property in here as 'track' is updated to 'null' 1s after track info is given
-      const events = {
-        'track': (value) => {
-          console.log(value.Title)
-          if (!value.Title) return true
-          const reformatted = cleanDBusProperties(value)
-          events.default(reformatted, 'track')
-          return true
-        },
-        'default': (value, key) => {
-          // console.log(`defualt: ${key}`)
-          this.#mediaProperties[key.toLowerCase()] = value
-          this.emit('media-update', this.#mediaProperties)
-        }
-      }
-
-      // Iterate through and call the corresponding event
-      Object.keys(changed).forEach(key => {
-          (events[key.toLowerCase()] || events.default ) (changed[key].value, key)
-      })
-    })
+    //setup transporter event handler
+    this.#media.transporter.on('propertyChanged', properties => this.emit('player-update', properties))
 
   }
 
@@ -197,12 +133,25 @@ class Device extends EventEmitter{
       const fdObj = await bus.getProxyObject('org.bluez', node)
       const transporter = await getInterface(fdObj, 'org.bluez.MediaTransport1')
       this.#media.transporter = transporter
-      // console.debug(`Media Transport initialised for ${this.properties.address}`)
     } catch (err) {
       err.description = 'Could not get org.bluez.MediaTransport1'
       throw err
     }
     return this.#media.transporter
+  }
+
+  async dispatchMediaCommand (method, params) {
+    method = method.charAt(0).toUpperCase() + method.slice(1)
+    if (this.#media.player[method] != null) {
+      this.#media.player[method] ()
+      return
+    }
+    if (this.#media.transporter.properties[method.toLowerCase()] != null) {
+      this.#media.transporter.properties[method.toLowerCase()] = params
+      return
+    }
+    throw new Error(`Command not found for media instance (${method})`)
+
   }
 
   async pair () {

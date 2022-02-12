@@ -32,14 +32,15 @@ const getInterface = async (obj, target, options) => {
     })
   })
 
-  const defaultPropertyChangeHandler = (value, key) => {
-    itf.properties[key] = value
+  const defaultHandler = (value, key, emitAgain = false) => {
+    itf._properties[key] = value
+    emitAgain && itf.emit('propertyChanged', itf.properties)
   }
 
   // Listener for property changes
-  propertiesInterface.on('PropertiesChanged', (itf, changed, invalidated) => {
+  propertiesInterface.on('PropertiesChanged', (itfs, changed, invalidated) => {
     Object.keys(changed).forEach(property => {
-      (options.propertyChanged[property.toLowerCase()] || defaultPropertyChangeHandler) (changed[property].value, property.toLowerCase(), defaultPropertyChangeHandler)
+      (options.propertyChanged[property.toLowerCase()] || defaultHandler) (changed[property].value, property.toLowerCase(), defaultHandler)
     })
     itf.emit('propertyChanged', itf.properties)
   })

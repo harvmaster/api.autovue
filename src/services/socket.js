@@ -35,7 +35,7 @@ class WebSocket {
       this.socket.emit('bt-deviceFound', { [device.properties.address]: device.properties })
       device.removeAllListeners('propertyChanged')
       device.on('propertyChanged', (properties) => this.notify(properties.address, 'bt-deviceUpdate', { [properties.address]: properties} ))
-      device.on('media-update', (properties) => this.notify(device.properties.address, 'media-update', { properties } ))
+      device.on('player-update', (properties) => this.notify(device.properties.address, 'media-update', { properties } ))
     })
 
     Bluetooth.on('deviceLost', device => {
@@ -123,6 +123,16 @@ class WebSocket {
     }
   }
 
+  async onMediaCommand (client, msg) {
+    const devices = Bluetooth.getDevices()
+    console.log(msg)
+    try {
+      devices[msg.address].dispatchMediaCommand(msg.method, msg.params)
+    } catch (err) {
+      console.log(err)
+    }
+  }
+
   /**
    * Triggered when a Websocket client connects
    * @param ws The Websocket of the client
@@ -140,6 +150,7 @@ class WebSocket {
     client.on('subscribe', (msg) => this.subscribe(client, msg))
     client.on('bt-connect', (msg) => this.connectToDevice(client, msg))
     client.on('bt-disconnect', (msg) => this.disconnectFromDevice(client, msg))
+    client.on('media-command', (msg) => this.onMediaCommand(client, msg))
     // client.on('check-host', (msg) => this.onCheckHost(client, msg))
   }
 
