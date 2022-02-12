@@ -23,4 +23,22 @@ const promiseTimeout = (ms, rejectionMessage, promise) => {
   ])
 }
 
-module.exports = { debug, promiseTimeout }
+const cleanDBusProperties = (obj) => {
+  const result = {}
+  Object.keys(obj).forEach(key => {
+    result[key.toLowerCase()] = obj[key].value
+  })
+  return result
+}
+
+const cleanDBusPrint = (obj) => {
+  console.log({
+    name: obj.name || obj['$name'],
+    nodes: obj.nodes,
+    interfaces: Object.keys(obj?.interfaces || {}),
+    properties: obj['$properties'],
+    methods: obj['$methods']
+  })
+}
+
+module.exports = { debug, promiseTimeout, cleanDBusProperties, cleanDBusPrint }

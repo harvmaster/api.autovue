@@ -30,6 +30,7 @@ class Bluetooth extends EventEmitter{
 
     try {
       await Promise.all(promises)
+      this.setDiscoverable(true)
       this.startDiscovery()
       console.log('Initialised Bluetooth Handler')
       console.log('Fetching Bluetooth Devices')
@@ -47,7 +48,10 @@ class Bluetooth extends EventEmitter{
       const bluez = await bus.getProxyObject('org.bluez', '/org/bluez')
 
       const agentManager = bluez.getInterface('org.bluez.AgentManager1')
+      // Registers and sets the agent as default. Not sure why it needs to be set as default as it should be per application basis and default should apply to all applications?
       agentManager.RegisterAgent('/test/agent', 'NoInputNoOutput')
+      agentManager.RequestDefaultAgent('/test/agent')
+
       console.log('Initialised Bluetooth Agent')
     } catch (err) {
       err.description = 'Failed to initialise Bluetooth Agent'
@@ -131,8 +135,17 @@ class Bluetooth extends EventEmitter{
       // Handle when a device is found
       this.objectManager.on('InterfacesAdded', async (itf, added) => {
         const address = itf.split('dev')[1].substring(1, 18).split('_').join(':')
-        // console.debug(added)
+
+        // Check if its a player interface
+        const itfSplit = itf.split('/')
+        const isPlayer = itfSplit[itfSplit.length - 1].includes('player')
+        // console.log(added)
+        // console.log(itf)
         try {
+          if (isPlayer) {
+            this.devices[address].initMedia(added)
+            return
+          } 
           if (!added['org.bluez.Device1']) return
           const deviceProxy = await bus.getProxyObject('org.bluez', `/org/bluez/hci0/dev_${added['org.bluez.Device1'].Address.value.split(':').join('_')}`)
           const device = new Device(deviceProxy)
@@ -201,7 +214,7 @@ class Bluetooth extends EventEmitter{
 
     // Emit as deviceFound because it shouldnt break anything
     this.emit('deviceFound', device)
-    console.log(device.properties)
+    // console.log(device.properties)
 
     // add to devices
     this.devices[address] = device

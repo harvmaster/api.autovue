@@ -35,6 +35,7 @@ class WebSocket {
       this.socket.emit('bt-deviceFound', { [device.properties.address]: device.properties })
       device.removeAllListeners('propertyChanged')
       device.on('propertyChanged', (properties) => this.notify(properties.address, 'bt-deviceUpdate', { [properties.address]: properties} ))
+      device.on('media-update', (properties) => this.notify(device.properties.address, 'media-update', { properties } ))
     })
 
     Bluetooth.on('deviceLost', device => {
@@ -94,10 +95,10 @@ class WebSocket {
     const devices = Bluetooth.getDevices()
     try {
       // console.log(devices)
-      console.log(devices[msg.address])
+      // console.log(devices[msg.address])
       const res = await devices[msg.address].connect()
       console.log('connected')
-      console.log(res)
+      // console.log(res)
       client.emit('connected', res)
     } catch (err) {
       // err.description = 'Could not connect to device'
