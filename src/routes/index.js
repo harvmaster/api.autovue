@@ -11,6 +11,7 @@ const router = express.Router()
 class RootRoute {
   constructor () {
     router.use('/', require('./users'))
+    router.use('/spotify', require('./spotify'))
 
     return router
   }

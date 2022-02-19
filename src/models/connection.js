@@ -5,6 +5,7 @@ const mongoose = require('mongoose')
 const schema = new mongoose.Schema({
   name: String,
   address: String,
+  spotifyId: String
 }, {
   timestamps: true
 })

@@ -283,6 +283,10 @@ class Bluetooth extends EventEmitter{
     
   }
 
+  getConnectedDevice () {
+    return Object.keys(this.devices).find(address => this.devices[address].properties.connected)
+  }
+
 
 }
 

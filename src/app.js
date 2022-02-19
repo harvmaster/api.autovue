@@ -6,6 +6,7 @@ const config = require('../config')
 const express = require('express')
 const bodyParser = require('body-parser')
 const cors = require('cors')
+const path = require('path')
 
 // Local Application
 const routes = require('./routes')
@@ -32,6 +33,8 @@ class App {
     app.use(bodyParser.json())
     app.use(bodyParser.raw({ type: '*/*' }))
     app.use(routes)
+
+    app.use('/public',express.static(path.resolve(__dirname,'public')));
 
     //
     // Set port and start ExpressJS Server

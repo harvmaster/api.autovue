@@ -3,9 +3,10 @@ const dbus = require('dbus-next')
 let bus = dbus.systemBus();
 
 const { promiseTimeout, cleanDBusProperties, cleanDBusPrint } = require('../../resources')
-const { getAlbumCover } = require('../../resources/player')
+// const { getAlbumCover } = require('../../resources/player')
 
 const { getInterface } = require('./DeviceInterface');
+const Connection = require('../../models/connection');
 
 class Device extends EventEmitter{
 
@@ -14,6 +15,7 @@ class Device extends EventEmitter{
   #propertiesInterface;
   #properties;
   #media;
+  #spotifyId;
 
 
   constructor (obj) {
@@ -63,6 +65,7 @@ class Device extends EventEmitter{
 
     // initiate media?
     if (this.#properties.connected) this.initMedia()
+    this.getSpotifyId()
   }
 
   // House keeping
@@ -71,7 +74,7 @@ class Device extends EventEmitter{
   }
 
   get properties () {
-    return this.#properties
+    return { ...this.#properties, spotifyId: this.#spotifyId }
   }
 
   get connected () {
@@ -80,6 +83,10 @@ class Device extends EventEmitter{
 
   get Media () {
     return this.#media
+  }
+
+  get spotifyId () {
+    return this.#spotifyId
   }
 
   async initMedia () {
@@ -100,11 +107,6 @@ class Device extends EventEmitter{
           if (!value.Title) return true
           const reformatted = cleanDBusProperties(value)
           next(reformatted, key)
-          // just re-call next() and emit the changes again
-          getAlbumCover(reformatted).then(image => {
-            reformatted.image = image
-            next(reformatted, key, true)
-          })
         }
       }
     })
@@ -199,28 +201,15 @@ class Device extends EventEmitter{
 
     return true;
   }
+
+  async getSpotifyId () {
+    const device = await Connection.findOne({ address: this.properties.address })
+    if (!device) return
+    this.#spotifyId = device.spotifyId
+  }
 }
 
 module.exports = Device
-
-// Go through all device properties and save to js object here.
-// On 'propertiesChanged' update the properties and then emit change
-// to the subscribed devices
-
-/*
-  async pair () {
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        clearTimeout(timeoutId)
-        reject(`Timeout Error. Could not pair to device ${this.#properties.name ? `(${this.properties.name})` : this.properties.address}`)
-      }, 10000)
-      this.once('paired', (properties) => {
-        clearTimeout(timeoutId)
-        resolve(properties)
-      })
-    })
-  }
-*/
 
     // const netItf = this.#obj.getInterface('org.bluez.Network1')
     // console.log(netItf)
