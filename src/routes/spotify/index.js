@@ -14,35 +14,38 @@ const Connection = require('../../models/connection')
   */
 class SpotifyRoute {
   constructor () {
-    router.get('/test', (req, res) => this.test())
+    router.get('/test', (req, res) => this.test(req, res))
     router.get('/authenticate', (req, res) => this.authenticate(req, res))
 	  router.get('/albumcover', (req, res) => this.getAlbumCover(req, res))
 		
 		return router
   }
 
-  async test () {
+  async test (req, res) {
     console.log('cum')
-    // const res = await axios.get('http://localhost:3000/spotify/albumcover', { params: { track: String('I write sins not tragedies'), artist: String('Panic! At The Disco') }}).catch(err => res.send(err))
-    // console.log(res)
+    const response = await axios.get('http://localhost:3000/spotify/albumcover', { params: { track: String('I write sins not tragedies'), artist: String('Panic! At The Disco') }}).catch(err => res.send(err))
+    // console.log(response)
+    res.redirect(response.data)
   }
 
   // I dont know if its safe to assume, BUT
   // We are going to attach the spotify code to the connected device
   async authenticate (req, res) {
+    console.log(req.query)
     const { id } = req.query
     // Get the current device
     const device = Bluetooth.getConnectedDevice()
     // Check if its in the database
     let dbDevice = await Connection.findOne({ address: device.properties.address })
+    
     if (!!dbDevice) {
       dbDevice.spotifyId = id
-      await dbDevice.save()
-      await device.getSpotifyId()
-      return res.send('Successfully Authenticated Spotify')
+    } else {
+      dbDevice = new Connection({ address: device.properties.address, spotifyId: id })
     }
 
-    dbDevice = new Connection({ address: device.properties.address, spotifyId: id })
+    console.log(dbDevice)
+
     await dbDevice.save()
     await device.getSpotifyId()
     res.send('Successfully Authenticated Spotify')
@@ -51,23 +54,36 @@ class SpotifyRoute {
   async getAlbumCover (req, res) {
 
     const { track, artist } = req.query
+    if (!track || !artist) return res.status(401).send('No track or artist given')
+    // Check if album art exists
+    const albumCheck = await axios.get(`http://raspberrypi.local:3000/public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`).catch(err => { return { } })
+    if (!!albumCheck.data) return res.redirect(`http://raspberrypi.local:3000/public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+
     // Get id of refreshToken
-    const id = '620d0e3cefd7e704881c271b'
-    console.log(req.query)
+    const device = Bluetooth.getConnectedDevice()
+    if (!device) return res.status(428).send('No device currently connected')
+
+    const  dbDevice = await Connection.findOne({ address: device.properties.address })
+
+    if (!dbDevice || !dbDevice.spotifyId) return res.status(401).send('No Authentication Token Found')
+    const id = dbDevice.spotifyId
    
     // Get from external
     const coverUrls = await axios.get('https://spotify.mc.hzuccon.com/spotify/albumcover', { params: { track: String(track), artist: String(artist), id: String(id) } })
+    // Check if it found a cover
     console.log(coverUrls.data)
+    if (coverUrls.data == 'undefined') return res.redirect('http://raspberrypi.local:3000/public/albums/placeholder.jpeg')
     // Get highest resolution
     const best = coverUrls.data.sort((a, b) => b.width - a.width)[0]
     // Get image data
     const imageRes = await axios.get(best.url, { responseType: 'stream' })
     // Save image
-    imageRes.data.pipe(fs.createWriteStream(`${__dirname}/../../public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`, err => {
-      if (err) throw err
-      console.log(`Saved file ${track} ${artist}`)
-      res.send(`http://raspberrypi.local:3000/public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
-    }))
+    const file = fs.createWriteStream(`${__dirname}/../../public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+    imageRes.data.pipe(file)
+    file.on('finish', () => {
+      console.log(`Saved file ${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+      res.redirect(`http://raspberrypi.local:3000/public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+    })
 	}
 
   async getFile (dbTrack) {

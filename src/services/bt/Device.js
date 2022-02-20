@@ -126,12 +126,25 @@ class Device extends EventEmitter{
   }
 
   async initMediaTransport () {
-    // Get sep1 object that contains the transport node
+    // Get sep object that contains the transport node
     // Get the node path for MediaTransport1
     // Get Object for the node
     // Get MediaTransport1 interface
     try {
-      const sep = await bus.getProxyObject('org.bluez', `${this.#obj.path}/sep1`)
+
+      // Update 1: This just keeps getting more complicated. Turns out MediaTransport1 can be in any SepX. So gotta find it
+      // Update 2: Turns out sep doesnt always exists anymore... I have no idea why, but appearantly code that previously worked doesnt now.
+      // Update 2 cont. : Going to just make this function get called if mediatransport hasnt been set because i dont know anymore
+      
+      // Get all seps
+      const allSepNodes = this.#obj.nodes.filter(node => node.split('/').at(-1).includes('sep'))
+      // Create the promises to resolve all at once
+      const allSepPromises = allSepNodes.map(node => bus.getProxyObject('org.bluez', node))
+      // Find the one with the mediaTransport1 in it
+      const sep = await Promise.all(allSepPromises).then(seps => {
+        return seps.find(sep => sep.nodes.find(node => node.split('/').at(-1).includes('fd') != null))
+      })
+
       const node = sep.nodes.find(node => node.split('/').at(-1).includes('fd'))
       const fdObj = await bus.getProxyObject('org.bluez', node)
       const transporter = await getInterface(fdObj, 'org.bluez.MediaTransport1')
@@ -189,6 +202,13 @@ class Device extends EventEmitter{
     } catch (err) {
       throw err
     }
+
+    const isNew = await Connection.findOne({ addess: this.properties.address })
+    if (!isNew) {
+      const dbDevice = new Connection({ address: this.properties.address })
+      await dbDevice.save()
+      console.log('saved device to database')
+    }
   
     return res
   }
@@ -206,6 +226,7 @@ class Device extends EventEmitter{
     const device = await Connection.findOne({ address: this.properties.address })
     if (!device) return
     this.#spotifyId = device.spotifyId
+    this.emit('propertyChanged', this.properties)
   }
 }
 

@@ -30,8 +30,9 @@ class Bluetooth extends EventEmitter{
 
     try {
       await Promise.all(promises)
-      this.setDiscoverable(true)
-      this.startDiscovery()
+      this.initInterfaceHandler()
+      // this.setDiscoverable(true)
+      // this.startDiscovery()
       console.log('Initialised Bluetooth Handler')
       console.log('Fetching Bluetooth Devices')
       this.hardReloadDevices()
@@ -97,33 +98,7 @@ class Bluetooth extends EventEmitter{
     }
   }
 
-  // Discoverable defines whether other devices can find this device in their bluetooth settings
-  async setDiscoverable (state) {
-    try {
-      await this.adapter.properties.Set('org.bluez.Adapter1', 'Discoverable', new Variant ('b', state ))
-    } catch (err) {
-      err.description = `Failed to set discoverable to ${state}`
-      console.debug(err.description)
-      throw err
-    }
-    return this
-  }
-
-  async isDiscoverable () {
-    try {
-      let state = await this.adapter.properties.Get('org.bluez.Adapter1', 'Discoverable')
-      return state
-    } catch (err) {
-      err.description = `Failed to get discoverable state`
-      console.debug(err.description)
-      throw err
-    }
-  }
-
-  // Discovery will add entries to hci0/nodes, therfore adding devices that can be interacted with
-  // Need to figure out a listener for this
-  async startDiscovery () {
-    // Add the currently discovered devices to the buffer and start listening for new ones
+  async initInterfaceHandler () {
     try {
       const currentDevices = await this.getDevices()
       this.discoveryBuffer = currentDevices
@@ -138,7 +113,7 @@ class Bluetooth extends EventEmitter{
 
         // Check if its a player interface
         const itfSplit = itf.split('/')
-        const isPlayer = itfSplit[itfSplit.length - 1].includes('player')
+        const isPlayer = itfSplit.at(-1).includes('player')
         // console.log(added)
         // console.log(itf)
         try {
@@ -180,6 +155,36 @@ class Bluetooth extends EventEmitter{
       console.debug(err.description)
       throw err
     }
+  }
+
+  // Discoverable defines whether other devices can find this device in their bluetooth settings
+  async setDiscoverable (state) {
+    try {
+      await this.adapter.properties.Set('org.bluez.Adapter1', 'Discoverable', new Variant ('b', state ))
+    } catch (err) {
+      err.description = `Failed to set discoverable to ${state}`
+      console.debug(err.description)
+      throw err
+    }
+    return this
+  }
+
+  async isDiscoverable () {
+    try {
+      let state = await this.adapter.properties.Get('org.bluez.Adapter1', 'Discoverable')
+      return state
+    } catch (err) {
+      err.description = `Failed to get discoverable state`
+      console.debug(err.description)
+      throw err
+    }
+  }
+
+  // Discovery will add entries to hci0/nodes, therfore adding devices that can be interacted with
+  // Need to figure out a listener for this
+  async startDiscovery () {
+    // Add the currently discovered devices to the buffer and start listening for new ones
+    
 
     try {
       console.debug('Starting Device Discovery')
@@ -284,7 +289,7 @@ class Bluetooth extends EventEmitter{
   }
 
   getConnectedDevice () {
-    return Object.keys(this.devices).find(address => this.devices[address].properties.connected)
+    return this.devices[Object.keys(this.devices).find(address => this.devices[address].properties.connected)]
   }
 
 
