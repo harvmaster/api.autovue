@@ -41,4 +41,11 @@ const cleanDBusPrint = (obj) => {
   })
 }
 
-module.exports = { debug, promiseTimeout, cleanDBusProperties, cleanDBusPrint }
+const arrayToObj = (arr) => {
+  return arr.reduce(function(acc, cur, i) {
+    acc[cur.id] = cur;
+    return acc;
+  }, {});
+}
+
+module.exports = { debug, promiseTimeout, cleanDBusProperties, cleanDBusPrint, arrayToObj }

@@ -23,15 +23,13 @@ class SpotifyRoute {
 
   async test (req, res) {
     console.log('cum')
-    const response = await axios.get('http://localhost:3000/spotify/albumcover', { params: { track: String('I write sins not tragedies'), artist: String('Panic! At The Disco') }}).catch(err => res.send(err))
-    // console.log(response)
+    const response = await axios.get('http://localhost:3000/spotify/albumcover', { params: { album: String('A Fever I Cant Sweat Out'), artist: String('Panic! At The Disco') }}).catch(err => res.send(err))
     res.redirect(response.data)
   }
 
   // I dont know if its safe to assume, BUT
   // We are going to attach the spotify code to the connected device
   async authenticate (req, res) {
-    console.log(req.query)
     const { id } = req.query
     // Get the current device
     const device = Bluetooth.getConnectedDevice()
@@ -44,8 +42,6 @@ class SpotifyRoute {
       dbDevice = new Connection({ address: device.properties.address, spotifyId: id })
     }
 
-    console.log(dbDevice)
-
     await dbDevice.save()
     await device.getSpotifyId()
     res.send('Successfully Authenticated Spotify')
@@ -53,11 +49,11 @@ class SpotifyRoute {
 
   async getAlbumCover (req, res) {
 
-    const { track, artist } = req.query
-    if (!track || !artist) return res.status(401).send('No track or artist given')
+    const { album, artist } = req.query
+    if (!album || !artist) return res.status(400).send('No album or artist given')
     // Check if album art exists
-    const albumCheck = await axios.get(`http://raspberrypi.local:3000/public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`).catch(err => { return { } })
-    if (!!albumCheck.data) return res.redirect(`http://raspberrypi.local:3000/public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+    const albumCheck = await axios.get(`http://raspberrypi.local:3000/public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`).catch(err => { return { } })
+    if (!!albumCheck.data) return res.redirect(`http://raspberrypi.local:3000/public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
 
     // Get id of refreshToken
     const device = Bluetooth.getConnectedDevice()
@@ -69,20 +65,21 @@ class SpotifyRoute {
     const id = dbDevice.spotifyId
    
     // Get from external
-    const coverUrls = await axios.get('https://spotify.mc.hzuccon.com/spotify/albumcover', { params: { track: String(track), artist: String(artist), id: String(id) } })
-    // Check if it found a cover
-    console.log(coverUrls.data)
+    const coverUrls = await axios.get('https://spotify.mc.hzuccon.com/spotify/albumcover', { params: { album: String(album), artist: String(artist), id: String(id) } })
+    
+    // Check if it found a cover, else give placeholder image - this should probably be moved to client side
     if (coverUrls.data == 'undefined') return res.redirect('http://raspberrypi.local:3000/public/albums/placeholder.jpeg')
+    
     // Get highest resolution
     const best = coverUrls.data.sort((a, b) => b.width - a.width)[0]
     // Get image data
     const imageRes = await axios.get(best.url, { responseType: 'stream' })
     // Save image
-    const file = fs.createWriteStream(`${__dirname}/../../public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+    const file = fs.createWriteStream(`${__dirname}/../../public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
     imageRes.data.pipe(file)
     file.on('finish', () => {
-      console.log(`Saved file ${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
-      res.redirect(`http://raspberrypi.local:3000/public/albums/${track.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+      console.log(`Saved file ${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+      res.redirect(`http://raspberrypi.local:3000/public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
     })
 	}
 

@@ -137,12 +137,16 @@ class Device extends EventEmitter{
       // Update 2 cont. : Going to just make this function get called if mediatransport hasnt been set because i dont know anymore
       
       // Get all seps
+      // console.log(this.#obj.nodes)
       const allSepNodes = this.#obj.nodes.filter(node => node.split('/').at(-1).includes('sep'))
+      // console.log(allSepNodes)
       // Create the promises to resolve all at once
       const allSepPromises = allSepNodes.map(node => bus.getProxyObject('org.bluez', node))
       // Find the one with the mediaTransport1 in it
-      const sep = await Promise.all(allSepPromises).then(seps => {
-        return seps.find(sep => sep.nodes.find(node => node.split('/').at(-1).includes('fd') != null))
+      // console.log(allSepPromises.length)
+      const sep = await Promise.all(allSepPromises).then(async seps => {
+        // seps.forEach(sep => console.log(sep.nodes))
+        return seps.find(sep => sep.nodes.find(node => node.split('/').at(-1).includes('fd')))
       })
 
       const node = sep.nodes.find(node => node.split('/').at(-1).includes('fd'))
@@ -195,7 +199,7 @@ class Device extends EventEmitter{
     let res
     try {
       res = await promiseTimeout(
-          10000,
+          20000,
           `Could not connect to device ${this.#properties.name ? `(${this.properties.name})` : this.properties.address}`,
           connectListener       
         )
@@ -203,9 +207,12 @@ class Device extends EventEmitter{
       throw err
     }
 
-    const isNew = await Connection.findOne({ addess: this.properties.address })
-    if (!isNew) {
-      const dbDevice = new Connection({ address: this.properties.address })
+    const exists = await Connection.findOne({ address: this.properties.address }).exec()
+    if (!exists) {
+      const connections = await Connection.find()
+      const last = connections.find(connection => !connection.priority.next)
+
+      const dbDevice = new Connection({ address: this.properties.address, priority: { prev: last.id } })
       await dbDevice.save()
       console.log('saved device to database')
     }

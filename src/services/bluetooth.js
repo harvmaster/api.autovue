@@ -28,6 +28,12 @@ class Bluetooth extends EventEmitter{
       this.initObjectManager()
     ]
 
+    // How to make better
+    // Attempt to connect to previous devices
+    // If unsuccessful, start discovery
+    // Also start discovery on disconnection
+    // and stop on conneciton
+
     try {
       await Promise.all(promises)
       this.initInterfaceHandler()
