@@ -121,7 +121,7 @@ class Bluetooth extends EventEmitter{
         const itfSplit = itf.split('/')
         const isPlayer = itfSplit.at(-1).includes('player')
         // console.log(added)
-        // console.log(itf)
+        console.log(itf)
         try {
           if (isPlayer) {
             this.devices[address].initMedia(added)

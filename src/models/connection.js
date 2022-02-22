@@ -29,6 +29,22 @@ schema.methods.format = async function () {
   }
 }
 
+schema.methods.getPriority = async function () {
+  // Get devices / connections
+  let connections = await Connection.find()
+  connections = arrayToObj(connections)
+
+  // Loop through counting iterations until the start
+  let check = this
+  for (let i = 0; i < connections.length; i++) {
+    if (check.priority.prev == null) return { value: i, ...this.priority }
+      
+    check = connections[check.priority.prev]
+  }
+
+  return { value: 0, ...this.priority }
+}
+
 schema.methods.setPosition = async function (position) {
   let connections = await Connection.find()  
   const first = connections.find(connection => connection.priority.prev == null) || connections[0]

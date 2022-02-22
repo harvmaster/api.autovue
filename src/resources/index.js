@@ -48,4 +48,6 @@ const arrayToObj = (arr) => {
   }, {});
 }
 
-module.exports = { debug, promiseTimeout, cleanDBusProperties, cleanDBusPrint, arrayToObj }
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+module.exports = { debug, promiseTimeout, cleanDBusProperties, cleanDBusPrint, arrayToObj, delay }

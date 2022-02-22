@@ -1,12 +1,14 @@
 const EventEmitter = require('events')
 const dbus = require('dbus-next')
 let bus = dbus.systemBus();
+const retry = require('async-retry');
 
-const { promiseTimeout, cleanDBusProperties, cleanDBusPrint } = require('../../resources')
+const { promiseTimeout, cleanDBusProperties, cleanDBusPrint, delay } = require('../../resources')
 // const { getAlbumCover } = require('../../resources/player')
 
 const { getInterface } = require('./DeviceInterface');
 const Connection = require('../../models/connection');
+const { waitForDebugger } = require('inspector');
 
 class Device extends EventEmitter{
 
@@ -15,7 +17,10 @@ class Device extends EventEmitter{
   #propertiesInterface;
   #properties;
   #media;
+
+  // small variables
   #spotifyId;
+  #priority;
 
 
   constructor (obj) {
@@ -26,7 +31,11 @@ class Device extends EventEmitter{
   }
   
   async init () {
-    this.#deviceInterface = this.#obj.getInterface('org.bluez.Device1')
+    try {
+      this.#deviceInterface = this.#obj.getInterface('org.bluez.Device1')
+    } catch (err) {
+      err.description = `Could not get Device1 interface for ${this.#obj.path}`
+    }
 
     // Get properties
     this.#propertiesInterface = this.#obj.getInterface('org.freedesktop.DBus.Properties')
@@ -125,19 +134,22 @@ class Device extends EventEmitter{
 
   }
 
-  async initMediaTransport () {
+  async initMediaTransport (attempt = 0) {
     // Get sep object that contains the transport node
     // Get the node path for MediaTransport1
     // Get Object for the node
     // Get MediaTransport1 interface
+    if (attempt == 5) throw new Error('Could not get org.bluez.MediaTransport1')
     try {
+      console.log(attempt)
 
       // Update 1: This just keeps getting more complicated. Turns out MediaTransport1 can be in any SepX. So gotta find it
       // Update 2: Turns out sep doesnt always exists anymore... I have no idea why, but appearantly code that previously worked doesnt now.
       // Update 2 cont. : Going to just make this function get called if mediatransport hasnt been set because i dont know anymore
-      
+      // Update 3: Might just have it retry a few times
+
       // Get all seps
-      // console.log(this.#obj.nodes)
+      console.log(this.#obj.nodes)
       const allSepNodes = this.#obj.nodes.filter(node => node.split('/').at(-1).includes('sep'))
       // console.log(allSepNodes)
       // Create the promises to resolve all at once
@@ -154,8 +166,8 @@ class Device extends EventEmitter{
       const transporter = await getInterface(fdObj, 'org.bluez.MediaTransport1')
       this.#media.transporter = transporter
     } catch (err) {
-      err.description = 'Could not get org.bluez.MediaTransport1'
-      throw err
+      await delay(500)
+      return await this.initMediaTransport(attempt + 1)
     }
     return this.#media.transporter
   }
@@ -220,6 +232,7 @@ class Device extends EventEmitter{
     return res
   }
 
+  // Cant listen for disconnect evnet as the interface is removed and then added back
   async disconnect () {
     const disconnectListener = new Promise ((resolve, reject) => {
       this.once('disconnected', (properties) => resolve(properties))
@@ -234,6 +247,14 @@ class Device extends EventEmitter{
     if (!device) return
     this.#spotifyId = device.spotifyId
     this.emit('propertyChanged', this.properties)
+  }
+
+  async getPriority () {
+    const device = await Connection.findOne({ address: this.properties.address })
+    const priority = await device.getPriority()
+    
+    this.#priority = priority
+    return priority
   }
 }
 
