@@ -8,7 +8,6 @@ const { promiseTimeout, cleanDBusProperties, cleanDBusPrint, delay } = require('
 
 const { getInterface } = require('./DeviceInterface');
 const Connection = require('../../models/connection');
-const { waitForDebugger } = require('inspector');
 
 class Device extends EventEmitter{
 
