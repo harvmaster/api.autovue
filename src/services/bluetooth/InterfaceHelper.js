@@ -1,17 +1,23 @@
 const EventEmitter = require('events')
 
-
-// The setter statements must be given in the form of a Variant. eg: new Variant('b', true)
-const getInterface = async (obj, target, options) => {
+const getInterface = async (obj, target, options = {}) => {
   const itf = new EventEmitter()
   itf._properties = {}
+
+  options.mutators = options.mutators || {}
+  options.callbacks = options.callbacks || {}
+
   
   // Get the properties and add them to the event emitter object
   const propertiesInterface = obj.getInterface('org.freedesktop.DBus.Properties')
   
   const properties = await propertiesInterface.GetAll(target)
   Object.keys(properties).forEach(property => {
-    itf._properties[property.toLowerCase()] = properties[property].value
+    const key = property.toLowerCase()
+    let value = properties[property].value
+
+    value = options.mutators.hasOwnProperty(key) ? options.mutators[key](value, key) : value
+    itf._properties[key] = value
   })
 
   // allow the caller to make changes to the properties
@@ -34,15 +40,20 @@ const getInterface = async (obj, target, options) => {
     })
   })
 
-  const defaultHandler = (value, key, emitAgain = false) => {
+  const defaultHandler = (value, key) => {
     itf._properties[key] = value
-    emitAgain && itf.emit('propertyChanged', itf.properties)
+    return
   }
 
   // Listener for property changes
   propertiesInterface.on('PropertiesChanged', (itfs, changed, invalidated) => {
     Object.keys(changed).forEach(property => {
-      (options.propertyChanged[property.toLowerCase()] || defaultHandler) (changed[property].value, property.toLowerCase(), defaultHandler)
+      const key = property.toLowerCase()
+      let value = changed[property].value
+
+      value = options.mutators.hasOwnProperty(key) ? options.mutators[key](value, key) : value
+      defaultHandler(value, key)
+      options.callbacks.hasOwnProperty(key) && options.callbacks[key] (itf.properties)
     })
     itf.emit('propertyChanged', itf.properties)
   })

@@ -53,7 +53,7 @@ class Bluetooth extends EventEmitter{
     console.log('Initialising Bluetooth Agent')
     try {
       const bluez = await bus.getProxyObject('org.bluez', '/org/bluez')
-
+      console.log(bluez)
       const agentManager = bluez.getInterface('org.bluez.AgentManager1')
       // Registers and sets the agent as default. Not sure why it needs to be set as default as it should be per application basis and default should apply to all applications?
       agentManager.RegisterAgent('/test/agent', 'NoInputNoOutput')
@@ -75,6 +75,8 @@ class Bluetooth extends EventEmitter{
       const adapterInterface = adapterObject.getInterface('org.bluez.Adapter1')
       const adapterProps = adapterObject.getInterface('org.freedesktop.DBus.Properties')
 
+      // const props = await adapterProps.getAll('org.bluez.Adapter1')
+      // console.log(adapterInterface)
       this.adapter = {
         obj: adapterObject,
         interface: adapterInterface,
@@ -145,6 +147,8 @@ class Bluetooth extends EventEmitter{
         // console.log(itf, removed)
         const address = itf.split('dev')[1].substring(1, 18).split('_').join(':')
         const device = this.devices[address]
+
+        console.log('device lost', itf)
 
         if (device.properties.paired) {
           this.emit('deviceDisconnected', device)
@@ -260,7 +264,6 @@ class Bluetooth extends EventEmitter{
       const res = {}
       // resolved.forEach(device => console.log(device.properties.alias))
       resolved.forEach(r => res[r.properties.address] = r)
-      // console.log(res)
       return res
     })
     this.devices = result

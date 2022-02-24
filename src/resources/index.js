@@ -48,6 +48,12 @@ const arrayToObj = (arr) => {
   }, {});
 }
 
+const log = (tag, ...msg) => {
+  if (!config.logger.tags.includes(tag)) return
+
+  console.log(`${tag}: ${msg}`)
+}
+
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-module.exports = { debug, promiseTimeout, cleanDBusProperties, cleanDBusPrint, arrayToObj, delay }
+module.exports = { debug, promiseTimeout, cleanDBusProperties, cleanDBusPrint, arrayToObj, delay, log }

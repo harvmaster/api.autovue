@@ -22,7 +22,7 @@ class App {
     //
     console.log('Connecting to MongoDB')
     mongoose.connect().catch(err => console.error(err.message))
-    
+
     //
     // Setup ExpressJS middleware, routes, etc
     //

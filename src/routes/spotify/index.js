@@ -5,7 +5,7 @@ const router = express.Router()
 const axios = require('axios')
 const fs = require('fs')
 
-const Bluetooth = require('../../services/bluetooth')
+const Bluetooth = require('../../services/bluetooth/Manager')
 const Connection = require('../../models/connection')
 
 /**
