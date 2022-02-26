@@ -2,8 +2,9 @@ const EventEmitter = require('events')
 const dbus = require('dbus-next')
 let bus = dbus.systemBus();
 
-const { getInterface } = require('./InterfaceHelper');
+const Device = require('./Device')
 
+const { getInterface } = require('./InterfaceHelper');
 const { log } = require('../../resources')
 
 class InterfaceObjectManager extends EventEmitter {

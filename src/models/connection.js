@@ -68,7 +68,6 @@ schema.methods.setPosition = async function (position) {
     next: prevCheck.id
   }
 
-
   // fix the gap created from its previous 'position'
   connections[priority.prev].priority.next = priority.next
   connections[priority.next].priority.prev = priority.prev
@@ -80,6 +79,26 @@ schema.methods.setPosition = async function (position) {
     connections[priority.prev].save(),
     connections[priority.next].save()
   )
+}
+
+schema.methods.getPosition = () => {
+
+}
+
+schema.statics.getPositionChain = async () => {
+  let devices = await Connection.find()
+  const first = devices.find(device => device.priority.prev == null)
+  devices = arrayToObj(devices)
+
+  const chain = []
+  let check = first
+  while (check.priority.next != null) {
+    chain.push(check.address)
+    check = devices[check.priority.next]
+  }
+  chain.push(check.address)
+
+  return chain
 }
 
 const Connection = module.exports = mongoose.model('Connection', schema)

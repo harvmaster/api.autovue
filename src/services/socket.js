@@ -4,7 +4,7 @@ const config = require('../../config')
 
 const SocketIO = require('socket.io')
 
-const Bluetooth = require('./bluetooth/Manager.js')
+const Bluetooth = require('./BluetoothController.js')
 
 /**
  * WebSocket Library for Jeopardy
@@ -36,6 +36,7 @@ class WebSocket {
       device.removeAllListeners('device-update')
       device.on('device-update', (properties) => this.notify(properties.address, 'bt-deviceUpdate', { [properties.address]: properties} ))
       device.on('player-update', (properties) => this.notify(device.properties.address, 'media-update', { properties } ))
+      device.on('disconnected', () => Bluetooth.setDiscovery(true))
     })
 
     Bluetooth.on('device-lost', device => {
@@ -82,7 +83,7 @@ class WebSocket {
 
   async refreshDiscoveredDevices (client, msg) {
     const devices = Bluetooth.getFormattedDevices()
-    const media = Bluetooth.getConnectedDevice().mediaProperties
+    const media = Bluetooth.getConnectedDevice()?.mediaProperties || {}
     try {
       client.emit('bt-devices', devices)
       client.emit('media-update', { properties: media })

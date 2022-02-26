@@ -59,7 +59,7 @@ class Device extends EventEmitter {
   }
 
   get mediaProperties () {
-    return this.#media.player.properties
+    return this.#media?.player?.properties || {}
   }
 
   async initMediaPlayer (itf) {
@@ -124,11 +124,16 @@ class Device extends EventEmitter {
   }
 
   async connect () {
-    if (this.properties.connected) throw 'Device already connected'
+    if (this.properties.connected) return this.properties
     const connectListener = new Promise ((resolve, reject) => {
       this.once('connected', (properties) => resolve(properties))
     })
-    this.#interface.Connect()
+    try { 
+      this.#interface.Connect()
+    } catch (err) {
+      log('bluetooth-device', `${this.properties.address} could not be connected to right now`)
+      return
+    }
   
     let res
     try {
@@ -179,6 +184,7 @@ class Device extends EventEmitter {
 
   async getPriority () {
     const device = await Connections.findOne({ address: this.properties.address })
+    if (!device) return 
     const priority = await device.getPriority()
     
     this.#priority = priority

@@ -29,11 +29,11 @@ class Bluetooth extends EventEmitter {
 
     try {
       await Promise.all(startupPromises)
-      this.emit('Initialised', this)
+      this.discoverDevices()
 
       console.log('initialised')
+      this.emit('initialised', this)
 
-      this.discoverDevices()
       return this
     } catch (err) {
       log('bluetooth-error', 'Failed to initialise Bluetooth'),
@@ -132,9 +132,14 @@ class Bluetooth extends EventEmitter {
 
   async setDiscovery (state) {
     log('bluetooth',  `${state ? 'Starting' : 'Stopping'} device discovery`)
+    if (this.discoveryState == state) return
+    // Cant discover while conencted to a device
+
     try {
-      const startDiscovery = this.#adapter.interface.StartDiscovery
-      const stopDiscovery = this.#adapter.interface.stopDiscovery
+      if (state && !!this.getConnectedDevice()) return log('bluetooth',  `Device currently connected. Did not enter discovery`)
+
+      const startDiscovery = this.#adapter.StartDiscovery
+      const stopDiscovery = this.#adapter.StopDiscovery
       state ? startDiscovery() : stopDiscovery()
     } catch (err) {
       err.desciption = `Failed to ${state ? 'start' : 'stop'} bluetooth discovery`
@@ -179,16 +184,26 @@ class Bluetooth extends EventEmitter {
   // Kind of an anti pattern here.
   // Connecting to the device here instead of in the device because i need to disconnect from any existing device first
   async connectTo (addresses) {
+    const currentlyConnected = this.getConnectedDevice()
     addresses = [].concat(addresses || [])
+    if (!!currentlyConnected && !addresses.includes(currentlyConnected?.properties.address)) await currentlyConnected?.disconnect()
+
     for (let address of addresses) {
       if (!this.devices[address]) log('bluetooth-error', `No device found with address: ${address}`)
-      if (this.devices[address].isConnected) {
+      if (address == currentlyConnected?.properties.address) {
         this.emit('device-connected', this.devices[address])
+        this.setDiscovery(false)
         return this.devices[address]
       }
-      const connected = await this.devices[address].connect()
-      if (connected) return connected
+      const connected = await this.devices[address].connect().catch(err => { })
+      if (connected) {
+        currentlyConnected?.disconnect()
+        this.setDiscovery(false)
+        return connected
+      }
     }
+
+    this.setDiscovery(true)
   }
 
 
