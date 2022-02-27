@@ -13,7 +13,8 @@ const initDeviceConnections = async (bt) => {
   const chain = await Connections.getPositionChain()
 
   console.log(chain)
-  Bluetooth.connectTo(chain).catch(err => {})
+  const device = await Bluetooth.connectTo(chain).catch(err => {})
+  if (!device) Bluetooth.setDiscovery(true)
 }
 
 module.exports = initBluetooth()

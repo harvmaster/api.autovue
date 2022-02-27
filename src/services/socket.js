@@ -143,7 +143,7 @@ class WebSocket {
     // client.emit('connected')
 
     // Setup event listeners
-    client.prependAny(console.log)
+    // client.prependAny(console.log)
     client.on('bt-refresh', (msg) => this.refreshDiscoveredDevices(client, msg))
     client.on('list', (msg) => this.onList(client, msg))
     client.on('subscribe', (msg) => this.subscribe(client, msg))

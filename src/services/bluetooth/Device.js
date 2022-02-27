@@ -59,7 +59,8 @@ class Device extends EventEmitter {
   }
 
   get mediaProperties () {
-    return this.#media?.player?.properties || {}
+    const { state, volume } = this.#media?.transporter.properties || {}
+    return { ...this.#media?.player?.properties, ...{ state, volume } } || {}
   }
 
   async initMediaPlayer (itf) {
@@ -82,7 +83,9 @@ class Device extends EventEmitter {
       }
     })
     this.#media.player = playerInterface
-    this.#media.player.on('propertyChanged', properties => this.emit('player-update', properties))
+    
+    // this.#media.player.on('propertyChanged', properties => console.log(properties))
+    this.#media.player.on('propertyChanged', properties => this.emit('player-update', this.mediaProperties))
 
     log('bluetooth-device', `[${this.properties.address}] Initialised Media Player`)
   }
@@ -105,7 +108,23 @@ class Device extends EventEmitter {
     const transporter = await getInterface(transportObj, 'org.bluez.MediaTransport1')
     this.#media.transporter = transporter
 
+    this.#media.transporter.on('propertyChanged', () => this.emit('player-update', this.mediaProperties))
+
     log('bluetooth-device', `[${this.properties.address}] Initialised Media Transporter`)
+  }
+
+  async dispatchMediaCommand (method, params) {
+    method = method.charAt(0).toUpperCase() + method.slice(1)
+    if (this.#media.player[method] != null) {
+      const res = await this.#media.player[method] ()
+      console.log(res)
+      return
+    }
+    if (this.#media.transporter.properties[method.toLowerCase()] != null) {
+      this.#media.transporter.properties[method.toLowerCase()] = params
+      return
+    }
+    throw new Error(`Command not found for media instance (${method})`)
   }
 
   async pair () {

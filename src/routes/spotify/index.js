@@ -16,8 +16,10 @@ class SpotifyRoute {
   constructor () {
     router.get('/test', (req, res) => this.test(req, res))
     router.get('/authenticate', (req, res) => this.authenticate(req, res))
-	  router.get('/albumcover', (req, res) => this.getAlbumCover(req, res))
-		
+	  router.get('/album/cover', (req, res) => this.getAlbumCover(req, res))
+    router.get('/saved/covers', (req, res) => this.getAllSavedCovers(req, res))
+		router.get('/album/cover/refresh', (req, res) => this.refreshAlbumCover(req, res))
+
 		return router
   }
 
@@ -49,42 +51,109 @@ class SpotifyRoute {
 
   async getAlbumCover (req, res) {
 
-    const { album, artist } = req.query
+    let { album, artist } = req.query
+    album = album.replace(/[^a-zA-Z0-9]/g, '');
+    artist = artist.replace(/[^a-zA-Z0-9]/g, '');
+
     if (!album || !artist) return res.status(400).send('No album or artist given')
-    // Check if album art exists
-    const albumCheck = await axios.get(`http://raspberrypi.local:3000/public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`).catch(err => { return { } })
-    if (!!albumCheck.data) return res.redirect(`http://raspberrypi.local:3000/public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
+    
+    // Check if album art already exists
+    const albumCheck = await axios.get(`http://raspberrypi.local:3000/public/albums/${album}@${artist}.jpeg`).catch(err => { return { } })
+    if (!!albumCheck.data) return res.redirect(`http://raspberrypi.local:3000/public/albums/${album}@${artist}.jpeg`)
 
     // Get id of refreshToken
     const device = Bluetooth.getConnectedDevice()
     if (!device) return res.status(428).send('No device currently connected')
 
-    const  dbDevice = await Connection.findOne({ address: device.properties.address })
-
+    const dbDevice = await Connection.findOne({ address: device.properties.address })
     if (!dbDevice || !dbDevice.spotifyId) return res.status(401).send('No Authentication Token Found')
     const id = dbDevice.spotifyId
    
     // Get from external
-    const coverUrls = await axios.get('https://spotify.mc.hzuccon.com/spotify/albumcover', { params: { album: String(album), artist: String(artist), id: String(id) } })
+    const coverUrls = await axios.get('https://spotify.mc.hzuccon.com/spotify/albumcover', { params: { album: req.query.album, artist: req.query.artist, id: id } })
     
     // Check if it found a cover, else give placeholder image - this should probably be moved to client side
     if (coverUrls.data == 'undefined') return res.redirect('http://raspberrypi.local:3000/public/albums/placeholder.jpeg')
     
     // Get highest resolution
     const best = coverUrls.data.sort((a, b) => b.width - a.width)[0]
-    // Get image data
-    const imageRes = await axios.get(best.url, { responseType: 'stream' })
-    // Save image
-    const file = fs.createWriteStream(`${__dirname}/../../public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
-    imageRes.data.pipe(file)
-    file.on('finish', () => {
-      console.log(`Saved file ${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
-      res.redirect(`http://raspberrypi.local:3000/public/albums/${album.split(' ').join('_')}@${artist.split(' ').join('_')}.jpeg`)
-    })
+    
+    // Save image and return link
+    try {
+      await this.saveCover(best.url, `${album}@${artist}`)
+      res.redirect(`http://raspberrypi.local:3000/public/albums/${album}@${artist}.jpeg`)
+    } catch (err) {
+      res.send('http://raspberrypi.local:3000/public/albums/placeholder.jpeg')
+    }
+
 	}
 
-  async getFile (dbTrack) {
+  async refreshAlbumCover (req, res) {
+    let { album, artist } = req.query
+    album = album.replace(/[^a-zA-Z0-9]/g, '');
+    artist = artist.replace(/[^a-zA-Z0-9]/g, '');
 
+    if (!album || !artist) return res.status(400).send('No album or artist given')
+
+    const imagePath = `${__dirname}/../../public/albums/${album}@${artist}.jpeg`
+    fs.unlink(imagePath, () => this.getAlbumCover(req, res))
+  }
+
+  async getAllSavedCovers (req, res) {
+    // Get id of refreshToken
+    const device = Bluetooth.getConnectedDevice()
+    if (!device) return res.status(428).send('No device currently connected')
+
+    const dbDevice = await Connection.findOne({ address: device.properties.address })
+
+    if (!dbDevice || !dbDevice.spotifyId) return res.status(401).send('No Authentication Token Found')
+    const id = dbDevice.spotifyId
+
+    // Get saved songs
+    const savedTracks = await axios.get('https://spotify.mc.hzuccon.com/spotify/saved', { params: { id }})
+    if (!savedTracks.data) return res.status(204).send()
+
+    const coverPromises = savedTracks.data.map(async item => {
+      let { album } = item.track
+      
+      let artist = album.artists[0].name
+      artist = artist.replace(/[^a-zA-Z0-9]/g, '');
+      album = album.name.replace(/[^a-zA-Z0-9]/g, '');
+      
+      const albumCheck = await axios.get(`http://raspberrypi.local:3000/public/albums/${album}@${artist}.jpeg`).catch(err => { return { } })
+      if (!!albumCheck.data) return
+
+      // Get highest resolution
+      const best = item.track.album.images.sort((a, b) => b.width - a.width)[0]
+      return this.saveCover(best.url, `${ablum}@${artist}`)
+
+    })
+
+
+  }
+
+  
+  saveCover (url, name) {
+    return new Promise (async (resolve, reject) => {
+      
+      const imagePath = `${__dirname}/../../public/albums/${name}.jpeg`
+
+      // Get image data
+      const imageRes = await axios.get(url, { responseType: 'stream' })
+      
+      // Save image
+      const file = fs.createWriteStream(imagePath)
+      imageRes.data.pipe(file)
+      file.on('finish', () => {
+        console.log(`Saved file ${name}.jpeg`)
+        resolve(imagePath)
+      })
+      file.on('error', err => {
+        console.warn(`Could not save ${name}.jpeg`)
+        fs.unlink(imagePath, () => console.log(`deleted ${name}}.jpeg`))
+      })
+    })
+    
   }
  
 }
