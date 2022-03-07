@@ -55,7 +55,7 @@ class SpotifyRoute {
     album = album.replace(/[^a-zA-Z0-9]/g, '');
     artist = artist.replace(/[^a-zA-Z0-9]/g, '');
 
-    if (!album || !artist) return res.status(400).redirect('http://raspberrypi.local:3000/public/albums/placeholder.png')
+    if (!album || !artist) return res.status(400).send() //redirect('http://raspberrypi.local:3000/public/albums/placeholder.png')
     
     // Check if album art already exists
     const albumCheck = await axios.get(`http://raspberrypi.local:3000/public/albums/${album}@${artist}.jpeg`).catch(err => { return { } })
