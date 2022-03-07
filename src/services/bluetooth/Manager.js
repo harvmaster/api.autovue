@@ -6,7 +6,8 @@ const Device = require('./Device')
 const InterfaceObjectManager = require('./InterfaceObjectManager')
 
 const { getInterface } = require('./InterfaceHelper')
-const { log } = require('../../resources');
+const { toVariant } = require('./Media/VariantTypes')
+const { log, cleanDBusPrint } = require('../../resources');
 
 class Bluetooth extends EventEmitter {
 
@@ -138,9 +139,15 @@ class Bluetooth extends EventEmitter {
     try {
       if (state && !!this.getConnectedDevice()) return log('bluetooth',  `Device currently connected. Did not enter discovery`)
 
-      const startDiscovery = this.#adapter.StartDiscovery
-      const stopDiscovery = this.#adapter.StopDiscovery
-      state ? startDiscovery() : stopDiscovery()
+      const start = () => {
+        this.#adapter.StartDiscovery()
+        this.#adapter.setProperty('Discoverable', toVariant('Discoverable', true))
+      }
+      const stop = () => {
+        this.#adapter.StopDiscovery()
+        this.#adapter.setProperty('Discoverable', toVariant('Discoverable', false))
+      }
+      state ? start() : stop()
     } catch (err) {
       err.desciption = `Failed to ${state ? 'start' : 'stop'} bluetooth discovery`
       log('bluetooth-error', err.description)

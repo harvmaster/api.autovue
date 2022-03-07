@@ -123,13 +123,18 @@ class WebSocket {
   }
 
   async onMediaCommand (client, msg) {
-    const devices = Bluetooth.getDevices()
+    const devices = Bluetooth.getConnectedDevice()
     console.log(msg)
     try {
-      devices[msg.address].dispatchMediaCommand(msg.method, msg.params)
+      devices.dispatchMediaCommand(msg)
     } catch (err) {
       console.log(err)
     }
+  }
+
+  async onDebug (client, msg) {
+    const device = Bluetooth.getConnectedDevice()
+    device.debug(msg.options || null)
   }
 
   /**
@@ -150,6 +155,7 @@ class WebSocket {
     client.on('bt-connect', (msg) => this.connectToDevice(client, msg))
     client.on('bt-disconnect', (msg) => this.disconnectFromDevice(client, msg))
     client.on('media-command', (msg) => this.onMediaCommand(client, msg))
+    client.on('debug', (msg) => this.onDebug(client, msg))
     // client.on('check-host', (msg) => this.onCheckHost(client, msg))
   }
 

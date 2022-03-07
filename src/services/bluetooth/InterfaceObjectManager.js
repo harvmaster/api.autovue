@@ -60,7 +60,7 @@ class InterfaceObjectManager extends EventEmitter {
           this.emit('mediaPlayer-found', { address, itf })
         },
         'default': () => {
-
+          console.log(`random interface: [${address}] ${itf}`)
         }
       }
 

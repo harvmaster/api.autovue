@@ -1,6 +1,10 @@
 const EventEmitter = require('events')
 
 const getInterface = async (obj, target, options = {}) => {
+  // make sure the interface exists
+  // console.log(obj)
+  if (!obj.interfaces.hasOwnProperty(target)) throw new Error(`${target} could not be found in ${obj.path}`)
+
   const itf = new EventEmitter()
   itf._properties = {}
 
@@ -11,14 +15,23 @@ const getInterface = async (obj, target, options = {}) => {
   // Get the properties and add them to the event emitter object
   const propertiesInterface = obj.getInterface('org.freedesktop.DBus.Properties')
   
-  const properties = await propertiesInterface.GetAll(target)
-  Object.keys(properties).forEach(property => {
-    const key = property.toLowerCase()
-    let value = properties[property].value
+  const getProperties = async () => {
+    const properties = await propertiesInterface.GetAll(target)
+    Object.keys(properties).forEach(property => {
+      const key = property.toLowerCase()
+      let value = properties[property].value
 
-    value = options.mutators.hasOwnProperty(key) ? options.mutators[key](value, key) : value
-    itf._properties[key] = value
-  })
+      value = options.mutators.hasOwnProperty(key) ? options.mutators[key](value, key) : value
+      itf._properties[key] = value
+    })
+  }
+  itf.getProperties = getProperties
+  await getProperties()
+
+  itf.getRawProperties = async () => {
+    const properties = await propertiesInterface.GetAll(target)
+    return properties
+  }
 
   // allow the caller to make changes to the properties
   // Allows for interface.properties.volume = 5
@@ -34,11 +47,18 @@ const getInterface = async (obj, target, options = {}) => {
     Object.defineProperty(itf.properties, property, {
       get: function () { return itf._properties[property] },
       set: async function (value) {
-        const res = await propertiesInterface.set(target, property, value)
+        console.log('setting')
+        const res = await propertiesInterface.Set(target, property, value)
+        console.log(res)
         return res
       }
     })
   })
+
+  itf.setProperty = async (property, value) => {
+    const res = await propertiesInterface.Set(target, property, value)
+    return res
+  }
 
   const defaultHandler = (value, key) => {
     itf._properties[key] = value
@@ -51,6 +71,8 @@ const getInterface = async (obj, target, options = {}) => {
       const key = property.toLowerCase()
       let value = changed[property].value
 
+      // console.log(key, value)
+
       value = options.mutators.hasOwnProperty(key) ? options.mutators[key](value, key) : value
       defaultHandler(value, key)
       options.callbacks.hasOwnProperty(key) && options.callbacks[key] (itf.properties)
@@ -62,6 +84,9 @@ const getInterface = async (obj, target, options = {}) => {
   const deviceInterface = obj.getInterface(target)
   deviceInterface['$methods'].forEach(method => itf[method.name] = deviceInterface[method.name])
 
+  itf.getPropertyCharacteristics = () => {
+    return deviceInterface['$properties']
+  }
   return itf
 }
 

@@ -87,6 +87,7 @@ schema.methods.getPosition = () => {
 
 schema.statics.getPositionChain = async () => {
   let devices = await Connection.find()
+  // console.log(devices)
   const first = devices.find(device => device.priority.prev == null)
   devices = arrayToObj(devices)
 
