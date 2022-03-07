@@ -19,12 +19,16 @@ class SpotifyRoute {
 	  router.get('/album/cover', (req, res) => this.getAlbumCover(req, res))
     router.get('/saved/covers', (req, res) => this.getAllSavedCovers(req, res))
 		router.get('/album/cover/refresh', (req, res) => this.refreshAlbumCover(req, res))
+    router.get('/browse/recommended', (req, res) => this.getRecommended(req, res))
 
 		return router
   }
 
+  async requireBTAuth (req, res, next) {
+
+  }
+
   async test (req, res) {
-    console.log('cum')
     const response = await axios.get('http://localhost:3000/spotify/albumcover', { params: { album: String('A Fever I Cant Sweat Out'), artist: String('Panic! At The Disco') }}).catch(err => res.send(err))
     res.redirect(response.data)
   }
@@ -55,6 +59,7 @@ class SpotifyRoute {
     album = album.replace(/[^a-zA-Z0-9]/g, '');
     artist = artist.replace(/[^a-zA-Z0-9]/g, '');
 
+    // Commented area redirects to a png. used when animated placeholder wasnt in use
     if (!album || !artist) return res.status(400).send() //redirect('http://raspberrypi.local:3000/public/albums/placeholder.png')
     
     // Check if album art already exists
@@ -132,6 +137,20 @@ class SpotifyRoute {
 
   }
 
+  async getRecommended (req, res) {
+    const device = Bluetooth.getConnectedDevice()
+    if (!device) return res.status(428).send('No device currently connected')
+
+    const dbDevice = await Connection.findOne({ address: device.properties.address })
+
+    if (!dbDevice || !dbDevice.spotifyId) return res.status(401).send('No Authentication Token Found')
+    const id = dbDevice.spotifyId
+
+    const response = await axios.get('https://spotify.mc.hzuccon.com/spotify/browse/recommended', { params: { id } }).catch(err => err.status == 504 ? console.log('Gateway error') : console.log(err))
+    console.log(response.data)
+    res.send(response.data.playlists.items)
+  }
+  
   
   saveCover (url, name) {
     return new Promise (async (resolve, reject) => {
