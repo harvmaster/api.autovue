@@ -1,5 +1,6 @@
 const config = require('../../config')
 const { arrayToObj } = require('../resources')
+const axios = require('axios')
 
 const mongoose = require('mongoose')
 
@@ -19,7 +20,6 @@ const schema = new mongoose.Schema({
     type: Array,
     of: Object
   }
-
 }, {
   timestamps: true
 })
@@ -32,8 +32,29 @@ schema.methods.format = async function () {
   }
 }
 
-schema.methods.setPosition = async function (position) {
+schema.statics.downloadLyrics = async function (title, artist, duration) {
+  console.log(`downloading lyrics for ${title} by ${artist}`)
 
+  const res = await axios.get(`https://api.lyrics.ovh/v1/${artist}/${title}`)
+
+  if (!res.data.lyrics) throw new Error(`No lryics found for ${title} by ${artist}`)
+
+  const dbLyrics = new Lyrics({ name: title, artist })
+  const splitLyrics = res.data.lyrics.split(/\n/)
+
+  const formattedLyrics = splitLyrics.map((line, index, arr) => {
+    const lyric = {
+      timestamp: duration / arr.length * index,
+      line: line
+    }
+    return lyric
+  })
+
+  console.log(formattedLyrics.filter(line => line.line != ''))
+
+  dbLyrics.lyrics = formattedLyrics
+
+  await dbLyrics.save()
 }
 
 schema.methods.getPosition = () => {

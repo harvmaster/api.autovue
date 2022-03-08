@@ -17,15 +17,26 @@ class SpotifyRoute {
     router.get('/test', (req, res) => this.test(req, res))
     router.get('/authenticate', (req, res) => this.authenticate(req, res))
 	  router.get('/album/cover', (req, res) => this.getAlbumCover(req, res))
-    router.get('/saved/covers', (req, res) => this.getAllSavedCovers(req, res))
+    router.get('/saved/covers', this.requireBTAuth, (req, res) => this.getAllSavedCovers(req, res))
 		router.get('/album/cover/refresh', (req, res) => this.refreshAlbumCover(req, res))
-    router.get('/browse/recommended', (req, res) => this.getRecommended(req, res))
+    router.get('/browse/recommended', this.requireBTAuth, (req, res) => this.getRecommended(req, res))
+    router.get('/saved', (req, res, next) => this.requireBTAuth(req, res, next), (req, res) => this.getSavedSongs(req, res))
+
 
 		return router
   }
 
   async requireBTAuth (req, res, next) {
+    console.log('test')
+    // Get id of refreshToken
+    const device = Bluetooth.getConnectedDevice()
+    if (!device) return res.status(428).send('No device currently connected')
 
+    const dbDevice = await Connection.findOne({ address: device.properties.address })
+
+    if (!dbDevice || !dbDevice.spotifyId) return res.status(401).send('No Authentication Token Found')
+    req.id = dbDevice.spotifyId
+    next()
   }
 
   async test (req, res) {
@@ -105,14 +116,7 @@ class SpotifyRoute {
   }
 
   async getAllSavedCovers (req, res) {
-    // Get id of refreshToken
-    const device = Bluetooth.getConnectedDevice()
-    if (!device) return res.status(428).send('No device currently connected')
-
-    const dbDevice = await Connection.findOne({ address: device.properties.address })
-
-    if (!dbDevice || !dbDevice.spotifyId) return res.status(401).send('No Authentication Token Found')
-    const id = dbDevice.spotifyId
+    const id = req.id
 
     // Get saved songs
     const savedTracks = await axios.get('https://spotify.mc.hzuccon.com/spotify/saved', { params: { id }})
@@ -149,6 +153,15 @@ class SpotifyRoute {
     const response = await axios.get('https://spotify.mc.hzuccon.com/spotify/browse/recommended', { params: { id } }).catch(err => err.status == 504 ? console.log('Gateway error') : console.log(err))
     console.log(response.data)
     res.send(response.data.playlists.items)
+  }
+
+  async getSavedSongs (req, res) {
+    const id = req.id
+
+    const response = await axios.get('https://spotify.mc.hzuccon.com/spotify/saved', { params: { id } })
+    console.log(response.data)
+
+    res.send(response.data)
   }
   
   

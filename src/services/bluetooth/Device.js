@@ -254,8 +254,13 @@ class Device extends EventEmitter {
     if (interfaces.includes('player')) console.log(player)
     if (interfaces.includes('transport')) console.log(transport)
     if (interfaces.includes('obj')) cleanDBusPrint(this.#obj)
-    if (interfaces.includes('network') && !interfaces.includes('destroy')) this.initNetwork()
-    if (interfaces.includes('destroy network')) this.destroyNetwork()
+
+    // Network Debugs
+    if (interfaces.includes('print-network')) console.log(this.#network)
+    if (interfaces.includes('init-network')) this.initNetwork()
+    if (interfaces.includes('destroy-network')) this.destroyNetwork()
+
+    // Misc
     if (interfaces.includes('volume down')) this.getMediaControl() 
     if (interfaces.includes('acquire mt')) this.acquireTransport()
     if (interfaces.includes('uuid-avrcp')) this.connectAVRCP()

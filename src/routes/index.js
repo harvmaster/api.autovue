@@ -12,6 +12,8 @@ class RootRoute {
   constructor () {
     router.use('/', require('./users'))
     router.use('/spotify', require('./spotify'))
+    router.use('/lyrics', require('./lyrics'))
+
 
     return router
   }
