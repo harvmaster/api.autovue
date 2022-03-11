@@ -21,7 +21,7 @@ class SpotifyRoute {
 		router.get('/album/cover/refresh', (req, res) => this.refreshAlbumCover(req, res))
     router.get('/browse/recommended', this.requireBTAuth, (req, res) => this.getRecommended(req, res))
     router.get('/saved', (req, res, next) => this.requireBTAuth(req, res, next), (req, res) => this.getSavedSongs(req, res))
-
+    router.get('/playlists', (req, res, next) => this.requireBTAuth(req, res, next), (req, res) => this.getPlaylists(req, res))
 
 		return router
   }
@@ -119,8 +119,10 @@ class SpotifyRoute {
     const id = req.id
 
     // Get saved songs
-    const savedTracks = await axios.get('https://spotify.mc.hzuccon.com/spotify/saved', { params: { id }})
+    const savedTracks = await axios.get('https://spotify.mc.hzuccon.com/spotify/saved/tracks', { params: { id }})
     if (!savedTracks.data) return res.status(204).send()
+
+    // We are going to try and batch
 
     const coverPromises = savedTracks.data.map(async item => {
       let { album } = item.track
@@ -151,16 +153,20 @@ class SpotifyRoute {
     const id = dbDevice.spotifyId
 
     const response = await axios.get('https://spotify.mc.hzuccon.com/spotify/browse/recommended', { params: { id } }).catch(err => err.status == 504 ? console.log('Gateway error') : console.log(err))
-    console.log(response.data)
     res.send(response.data.playlists.items)
   }
 
   async getSavedSongs (req, res) {
     const id = req.id
 
-    const response = await axios.get('https://spotify.mc.hzuccon.com/spotify/saved', { params: { id } })
-    console.log(response.data)
+    const response = await axios.get('https://spotify.mc.hzuccon.com/spotify/saved/tracks', { params: { id } })
+    res.send(response.data)
+  }
 
+  async getPlaylists (req, res) {
+    const id = req.id
+
+    const response = await axios.get('https://spotify.mc.hzuccon.com/spotify/playlists', { params: { id }})
     res.send(response.data)
   }
   
